@@ -18,5 +18,6 @@
     <ClInclude Include="targetver.h" />
     <ClInclude Include="BlockMemory.h" />
     <ClInclude Include="Trie.h" />
+    <ClInclude Include="Dawg.h" />
   </ItemGroup>
 </Project>

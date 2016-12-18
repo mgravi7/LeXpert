@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Trie.h"
 #include "LxpStdLib.h"
+#include "Dawg.h"
 
 #include <assert.h>
 
@@ -12,12 +13,25 @@ namespace LxpStd
 	{
 		this->diagnostics.numNodes = 0;
 		this->diagnostics.numWords = 0;
+		this->diagnostics.numWordLetters = 0;
 		this->diagnostics.numLetters = 0;
+		this->diagnostics.numReversePartWords = 0;
 
-		// get the root node initialized
+		this->diagnostics.numFirstChildrenAfterCompression = 0;
+		this->diagnostics.numFirstChildrenBeforeCompression = 0;
+		this->diagnostics.numNodesAfterCompression = 0;
+
+		// get the special nodes initialized
 		this->pRootNode = AllocateNewNode();
+		this->pForwardWordNode = AllocateNewNode(this->pRootNode, Dawg::FORWARD_WORD_DAWG_SYMBOL, false);
+		this->pReversePartWordNode = AllocateNewNode(this->pRootNode, Dawg::REVERSE_PARTWORD_DAWG_SYMBOL, false);
+
+		this->pRootNode->pFirstChild = this->pForwardWordNode;
+		this->pForwardWordNode->pNextSibling = this->pReversePartWordNode;
+
+		// state and rest
 		this->state = TrieState::ADDING_WORDS;
-		this->compressedNodeIdx = 0;
+		this->firstChildrenCompressNodeIdx = 0;
 	}
 
 	// DESTRUCTOR
@@ -34,7 +48,7 @@ namespace LxpStd
 	{
 		// validation
 		assert(pParentNode != NULL);
-		assert(childLetter >= LxpStd::START_LETTER && childLetter <= LxpStd::END_LETTER);
+		assert(Trie::IsValidLetter(childLetter));
 
 		// increment letter count
 		this->diagnostics.numLetters++;
@@ -63,7 +77,7 @@ namespace LxpStd
 			// is the letter to be inserted before curNode?
 			if (childLetter < pCurNode->letter)
 			{
-				// create a new node and set it sibling
+				// create a new node and set its sibling
 				pNewNode = AllocateNewNode(pParentNode, childLetter, isWordTerminal);
 				pNewNode->pNextSibling = pCurNode;
 
@@ -74,10 +88,6 @@ namespace LxpStd
 				else
 					pPrevSibling->pNextSibling = pNewNode;
 
-				// is the new node parent's first child now?
-				if (pPrevSibling == NULL)
-					pParentNode->pFirstChild = pNewNode;
-
 				return pNewNode;
 			}
 
@@ -86,39 +96,88 @@ namespace LxpStd
 			pCurNode = pCurNode->pNextSibling;
 		}
 
-		// this is the last child, link it to previous sibling
+		// node to be created is the last child, link it to previous sibling
+		assert(pCurNode == NULL);
 		pNewNode = AllocateNewNode(pParentNode, childLetter, isWordTerminal);
 		pPrevSibling->pNextSibling = pNewNode;
 		return pNewNode;
 	}
 
 	// ADD WORD
-	void Trie::AddWord(const char* pWord)
+	void Trie::AddWord(const char* pWord) throw(...)
 	{
-		// TODO Validate state for addition
-
 		// validation
 		assert(pWord != NULL);
-
+		
+		// validate state for addition
+		if (this->state != TrieState::ADDING_WORDS)
+			throw(std::exception("Trie must be in ADDING_WORDS state!"));
+		
 		// initializations
-		char curChar = *pWord++;
-		TrieNode* pCurNode = this->pRootNode;
-		bool isWordTerminal = FALSE;
+		const char* pNextChar = pWord;
+		char curChar = *pNextChar++;
+		TrieNode* pCurNode = this->pForwardWordNode;
+		bool isWordTerminal = false;
+		unsigned int wordLength = 0;
 		
 		// add child node
 		while (curChar != '\0')
 		{
+			wordLength++;
+
 			// are we at the last letter of the word?
-			if (*pWord == '\0')
-				isWordTerminal = TRUE;
+			if (*pNextChar == '\0')
+				isWordTerminal = true;
 
 			pCurNode = AddChildNode(pCurNode, curChar, isWordTerminal);
-			curChar = *pWord++;
+			curChar = *pNextChar++;
 		}
 
-		// increment word count if we did add a word
-		if (isWordTerminal)
+		// diagnostics
+		if (wordLength > 0)
+		{
 			this->diagnostics.numWords++;
+			this->diagnostics.numWordLetters += wordLength;
+		}
+
+		// add the reversed part word
+		AddReversedPartWords(pWord, wordLength);
+	}
+
+	// ADD REVERSED PART WORDS
+	// For example, if the word is CATS, and the wordLength is 4, the following
+	// part words are added to the reverse part word part of the DAWG:
+	//
+	// STAC
+	// TAC
+	// AC
+	// C
+	void Trie::AddReversedPartWords(const char* pWord, unsigned int wordLength) throw(...)
+	{
+		// validation
+		assert(pWord != NULL);
+		assert(this->state == TrieState::ADDING_WORDS);
+
+		// recursion stopper
+		if (wordLength == 0)
+			return;
+
+		// add letters in reverse starting at wordLength - 1
+		TrieNode* pCurNode = this->pReversePartWordNode;
+		bool isWordTerminal = false;
+		for (int idx = wordLength - 1; idx >= 0; idx--)
+		{
+			// final letter?
+			if (idx == 0)
+				isWordTerminal = true;
+			pCurNode = AddChildNode(pCurNode, pWord[idx], isWordTerminal);
+		}
+
+		// increment reverse part word count
+		this->diagnostics.numReversePartWords++;
+
+		// need to add reverse part word starting at wordLength - 1
+		AddReversedPartWords(pWord, wordLength - 1);
 	}
 
 	// ALLOCATE NEW NODE
@@ -131,11 +190,11 @@ namespace LxpStd
 		pNewNode->pFirstChild = NULL;
 		pNewNode->pNextSibling = NULL;
 		pNewNode->pOriginalParent = NULL;
-		pNewNode->letter = LxpStd::DEFAULT_LETTER;
-		pNewNode->isWordTerminal = FALSE;
+		pNewNode->letter = Dawg::DEFAULT_LETTER;
+		pNewNode->isWordTerminal = false;
 
-		pNewNode->isCompressed = FALSE;
-		pNewNode->isDuplicate = FALSE;
+		pNewNode->isCounted = false;
+		pNewNode->isDuplicate = false;
 
 		return pNewNode;
 	}
@@ -146,7 +205,7 @@ namespace LxpStd
 		char		letter,
 		bool		isWordTerminal)
 	{
-		assert(letter >= LxpStd::START_LETTER && letter <= LxpStd::END_LETTER);
+		assert(Trie::IsValidLetter(letter));
 
 		TrieNode* pNewNode = AllocateNewNode();
 		pNewNode->pOriginalParent = pOriginalParent;
@@ -161,31 +220,35 @@ namespace LxpStd
 	{
 		// are these the same nodes or are both of them NULL?
 		if (pNode1 == pNode2)
-			return TRUE;
+			return true;
 
 		// one of them NULL?
 		if (pNode1 == NULL || pNode2 == NULL)
-			return FALSE;
+			return false;
 
 		// different letters?
 		if (pNode1->letter != pNode2->letter)
-			return FALSE;
+			return false;
 
 		// different word terminal setting?
 		if (pNode1->isWordTerminal != pNode2->isWordTerminal)
-			return FALSE;
+			return false;
 
 		// is the next sibling similar
 		if (!AreNodesSimilar(pNode1->pNextSibling, pNode2->pNextSibling))
-			return FALSE;
+			return false;
 
 		// is the first child similar
 		return AreNodesSimilar(pNode1->pFirstChild, pNode2->pFirstChild);
 	}
 
 	// COMPRESS
-	bool Trie::Compress(void)
+	bool Trie::Compress(void) throw(...)
 	{
+		// validate state for addition
+		if (this->state == TrieState::COMPRESSED)
+			throw(std::exception("Trie is already COMPRESSED!"));
+
 		// adding words state
 		if (this->state == TrieState::ADDING_WORDS)
 		{
@@ -193,28 +256,60 @@ namespace LxpStd
 
 			// need to identify and collect first children
 			IdentifyFirstChildren(this->pRootNode);
-			this->compressedNodeIdx = 0;
+			this->firstChildrenCompressNodeIdx = 0;
+			this->diagnostics.numFirstChildrenBeforeCompression = this->firstChildren.size();
 		}
 
 		// compression in progress
 		if (this->state == TrieState::COMPRESSING)
 		{
-			// need to remove duplicates for the current node
-			RemoveDuplicates(this->compressedNodeIdx);
-			this->compressedNodeIdx++;
-
 			// are we done?
-			if (this->compressedNodeIdx >= this->firstChildren.size() - 1)
+			if (this->firstChildrenCompressNodeIdx >= this->firstChildren.size() - 1)
 			{
 				this->state = TrieState::COMPRESSED;
-				return TRUE;	// done compressing
+				UpdateAfterCompressionDiagnostics();
+				return true;	// done compressing
 			}
 			else
-				return FALSE;	// more work is left
+			{
+				// need to remove duplicates for the current node
+				RemoveDuplicates(this->firstChildrenCompressNodeIdx);
+				this->firstChildrenCompressNodeIdx++;
+
+				return false;	// more work is left
+			}
 		}
 
 		assert(this->state == TrieState::COMPRESSED);
-		return TRUE;	// nothing to do, state must be COMPRESSED
+		return true;	// nothing to do, state must be COMPRESSED
+	}
+
+	// GET DIAGNOSTICS
+	void Trie::GetDiagnostics(TrieDiagnostics& diagnostics) const
+	{
+		diagnostics = this->diagnostics;
+	}
+
+	// GET NODE COUNT FOR TREE
+	unsigned int Trie::GetNodeCountForTree(TrieNode* pNode) 
+	{
+		unsigned int count = 0;
+
+		// recursion stop condition
+		if (pNode == NULL)
+			return count;
+		
+		// count the node (if not counted), sibling and first child
+		if (!pNode->isCounted)
+		{
+			count = 1;
+			pNode->isCounted = true;
+		}
+		
+		count += GetNodeCountForTree(pNode->pNextSibling);
+		count += GetNodeCountForTree(pNode->pFirstChild);
+
+		return count;
 	}
 
 	// IDENTIFY FIRST CHILDREN
@@ -240,27 +335,78 @@ namespace LxpStd
 			IdentifyFirstChildren(pParentNode->pNextSibling);
 	}
 
+	// IS VALID LETTER
+	bool Trie::IsValidLetter(char letter)
+	{
+		// allowed letter range?
+		if (letter >= Dawg::START_LETTER && letter <= Dawg::END_LETTER)
+			return true;
+
+		// other special letters
+		if (letter == Dawg::FORWARD_WORD_DAWG_SYMBOL)
+			return true;
+
+		if (letter == Dawg::REVERSE_PARTWORD_DAWG_SYMBOL)
+			return true;
+
+		// no match
+		return false;
+	}
+
+	// LENGTH
+	unsigned int Trie::Length()
+	{
+		// clear the counted state
+		SetIsCountedStateForTree(this->pRootNode, false);
+		return GetNodeCountForTree(this->pRootNode);
+	}
+
 	// REMOVE DUPLICATES
 	void Trie::RemoveDuplicates(unsigned int node1Index)
 	{
-		// removing duplicates for one one node (node1Index)
+		// removing duplicates for only one node (node1Index)
 		int numFirstChildren = this->firstChildren.size();
 		
 		TrieNode* pNode1 = this->firstChildren[node1Index];
-		if (!pNode1->isCompressed)
+
+		for (int node2Index = node1Index + 1; node2Index < numFirstChildren; node2Index++)
 		{
-			for (int node2Index = node1Index + 1; node2Index < numFirstChildren; node2Index++)
+			TrieNode* pNode2 = this->firstChildren[node2Index];
+			if (!pNode2->isDuplicate && AreNodesSimilar(pNode1, pNode2))
 			{
-				TrieNode* pNode2 = this->firstChildren[node2Index];
-				if (!pNode2->isDuplicate && AreNodesSimilar(pNode1, pNode2))
-				{
-					// mark node2 as duplicate and relink the parent's first child
-					pNode2->isDuplicate = TRUE;
-					pNode2->pOriginalParent->pFirstChild = pNode1;
-				}
+				// mark node2 as duplicate and relink the parent's first child
+				pNode2->isDuplicate = true;
+				pNode2->pOriginalParent->pFirstChild = pNode1;
 			}
-			pNode1->isCompressed = TRUE;
 		}
+	}
+
+	// SET IS COUNTED STATE FOR TREE
+	void Trie::SetIsCountedStateForTree(TrieNode* pNode, bool isCounted)
+	{
+		// recursion stop condition
+		if (pNode == NULL)
+			return;
+
+		pNode->isCounted = isCounted;
+		SetIsCountedStateForTree(pNode->pNextSibling, isCounted);
+		SetIsCountedStateForTree(pNode->pFirstChild, isCounted);
+	}
+
+	// UPDATE COMPRESSION DIAGNOSTICS
+	void Trie::UpdateAfterCompressionDiagnostics()
+	{
+		// first children nodes
+		int numDuplicates = 0;
+		for (int idx = 0; idx < this->firstChildren.size(); idx++)
+		{
+			if (this->firstChildren[idx]->isDuplicate)
+				numDuplicates++;
+		}
+		this->diagnostics.numFirstChildrenAfterCompression = this->firstChildren.size() - numDuplicates;
+
+		// number of nodes
+		this->diagnostics.numNodesAfterCompression = Length();
 	}
 }
 
