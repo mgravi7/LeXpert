@@ -11,6 +11,7 @@
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="BlockMemory.cpp" />
     <ClCompile Include="Trie.cpp" />
+    <ClCompile Include="Dawg.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="LxpStdLib.h" />

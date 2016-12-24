@@ -14,6 +14,7 @@ namespace LxpStdLibUnitTest
 		static const unsigned int NUM_OVERHEAD_NODES = 3;	// implementation assumed (root node, forward word node, reverse part word node)
 
 		static const int numWordsInLexicon = 7;
+		static const int numUniqueReversePartWordsInLexicon = 13;
 		const char* lexicon[numWordsInLexicon] = { "BAT", "BATS", "CAR", "CARS", "CAT", "CATS", "FAT" };
 		static const unsigned int expectedNumNodesBeforeCompression = 38 + 1;	// +1 for root node
 		static const unsigned int expectedNumNodesAfterCompression = 31 + 1;	// +1 for root node

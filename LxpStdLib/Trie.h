@@ -4,6 +4,8 @@
 #define TRIE_H
 
 #include "BlockMemory.h"
+#include "Dawg.h"
+
 #include <vector>
 
 namespace LxpStd
@@ -17,7 +19,11 @@ namespace LxpStd
 		// these are essential for processing and building the Trie
 		TrieNode*	pFirstChild;
 		TrieNode*	pNextSibling;
-		TrieNode*	pOriginalParent;	// useful for compression
+		union
+		{
+			TrieNode*	pOriginalParent;	// useful for compression
+			int			nodeNumber;			// used in DAWG generation phase
+		};
 		char		letter;
 		bool		isWordTerminal;
 		
@@ -58,31 +64,39 @@ namespace LxpStd
 		~Trie();
 
 		// Methods
-		void	AddWord(const char* pWord);	// words can be added in any order (see note below)
-		bool	Compress(void);				// SHOULD be called after all the words are added
+		void	AddWord(const char* pWord) throw(...);	// words can be added in any order (see note below)
+		bool	Compress(void);							// SHOULD be called after all the words are added
+		void	SaveAsDawg(std::string fileName, std::string lexiconName) const;
 
 		// Diagnostics
 		void	GetDiagnostics(TrieDiagnostics& diagnostics) const;
 	
 	private:
 		enum class TrieState {ADDING_WORDS, COMPRESSING, COMPRESSED};
+		static const int DEFAULT_NODE_NUMBER = -1;
 
 		// Implementation
 		TrieNode*		AddChildNode(TrieNode* pParentNode, char childLetter, bool isWordTerminal);
 		void			AddReversedPartWords(const char* pWord, unsigned int wordLength);
+		int				AddTreeToDawg(TrieNode* pNode, DawgCreator& dawgCreator, int lastSavedNodeNumber) const;
+																						// returns last saved node number
 		TrieNode*		AllocateNewNode(void);
 		TrieNode*		AllocateNewNode(TrieNode* pOriginalParent, char letter, bool isWordTerminal);
-		bool			AreNodesSimilar(TrieNode* pNode1, TrieNode* pNode2) const;
 
+		bool			AreNodesSimilar(TrieNode* pNode1, TrieNode* pNode2) const;
+		int				AssignNodeNumberForTree(TrieNode* pNode, int nextNodeNumber);	// returns next node number to be used
 		unsigned int	GetNodeCountForTree(TrieNode* pNode);
 		void			IdentifyFirstChildren(TrieNode* pParentNode);
 		unsigned int	Length();	// returns number of nodes in the Trie
+
 		void			RemoveDuplicates(unsigned int firstChildrenNodeIdx);
+		void			SetDefaultNodeNumberForTree(TrieNode* pNode);
 		void			SetIsCountedStateForTree(TrieNode* pNode, bool isCounted);
 		void			UpdateAfterCompressionDiagnostics();
 
 		// static methods
 		static bool		IsValidLetter(char letter);
+		static void		TrieNodeToDawgNode(const TrieNode* pTrieNode, DawgNode& dawgNode) throw(...);
 
 		// Not Implemented
 		Trie(const Trie& trie);

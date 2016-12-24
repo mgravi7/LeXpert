@@ -4,6 +4,9 @@
 #include "Dawg.h"
 
 #include <assert.h>
+#include <string>
+
+using namespace std;
 
 namespace LxpStd
 {
@@ -180,6 +183,47 @@ namespace LxpStd
 		AddReversedPartWords(pWord, wordLength - 1);
 	}
 
+	// ADD TREE TO DAWG
+	// *** To be called on first child only ***
+	int Trie::AddTreeToDawg(TrieNode* pNode, DawgCreator& dawgCreator, int lastSavedNodeNumber) const
+	{
+		// recursion stop conditions
+		if (pNode == NULL)
+			return lastSavedNodeNumber;
+
+		if (pNode->nodeNumber == Trie::DEFAULT_NODE_NUMBER)
+			return lastSavedNodeNumber;
+
+		// node numbers are saved sequentially. Due to
+		// cyclical nature of DAWG, previous added nodes may be
+		// asked to be added again. Guard against that!
+		if (pNode->nodeNumber <= lastSavedNodeNumber)
+			return lastSavedNodeNumber;
+		
+		// save all the siblings first
+		TrieNode* pSaveNode = pNode;
+		DawgNode dawgNode;
+		while (pSaveNode != NULL)
+		{
+			assert(pSaveNode->nodeNumber == lastSavedNodeNumber + 1); // verifies sequencing
+			Trie::TrieNodeToDawgNode(pSaveNode, dawgNode);
+			dawgCreator.AddNode(dawgNode);
+
+			lastSavedNodeNumber = pSaveNode->nodeNumber;
+			pSaveNode = pSaveNode->pNextSibling;
+		}
+
+		// save all the first children and their tree of the current tree
+		pSaveNode = pNode;
+		while (pSaveNode != NULL)
+		{
+			lastSavedNodeNumber = AddTreeToDawg(pSaveNode->pFirstChild, dawgCreator, lastSavedNodeNumber);
+			pSaveNode = pSaveNode->pNextSibling;
+		}
+
+		return lastSavedNodeNumber;
+	}
+
 	// ALLOCATE NEW NODE
 	TrieNode* Trie::AllocateNewNode(void)
 	{
@@ -242,6 +286,43 @@ namespace LxpStd
 		return AreNodesSimilar(pNode1->pFirstChild, pNode2->pFirstChild);
 	}
 
+	// ASSIGN NODE NUMBER FOR TREE
+	// *** To be called for first children only ***
+	int Trie::AssignNodeNumberForTree(TrieNode* pNode, int nextNodeNumber)
+	{
+		// recursion stop condition
+		if (pNode == NULL)
+			return nextNodeNumber;
+
+		// if this is a duplicate don't touch!
+		if (pNode->isDuplicate)
+			return nextNodeNumber;
+
+		// if the node is numbered return
+		if (pNode->nodeNumber != Trie::DEFAULT_NODE_NUMBER)
+			return nextNodeNumber;
+
+		// first child and siblings need to be contiguous
+		pNode->nodeNumber = nextNodeNumber++;
+		TrieNode* pSibling = pNode->pNextSibling;
+		while (pSibling != NULL)
+		{
+			pSibling->nodeNumber = nextNodeNumber++;
+			pSibling = pSibling->pNextSibling;
+		}
+
+		// need to have the first child of the tree numbered too
+		nextNodeNumber = AssignNodeNumberForTree(pNode->pFirstChild, nextNodeNumber);
+		pSibling = pNode->pNextSibling;
+		while (pSibling != NULL)
+		{
+			nextNodeNumber = AssignNodeNumberForTree(pSibling->pFirstChild, nextNodeNumber);
+			pSibling = pSibling->pNextSibling;
+		}
+
+		return nextNodeNumber;
+	}
+
 	// COMPRESS
 	bool Trie::Compress(void) throw(...)
 	{
@@ -266,8 +347,18 @@ namespace LxpStd
 			// are we done?
 			if (this->firstChildrenCompressNodeIdx >= this->firstChildren.size() - 1)
 			{
+				// compression finished
 				this->state = TrieState::COMPRESSED;
+
+				// get nodes numbered
+				SetDefaultNodeNumberForTree(this->pRootNode);
+				int startNodeNumber = 0;
+				unsigned int numNodes = AssignNodeNumberForTree(this->pRootNode, startNodeNumber);
+
+				// diagnostics
 				UpdateAfterCompressionDiagnostics();
+				assert(numNodes == this->diagnostics.numNodesAfterCompression);		// different methods of computing num nodes
+
 				return true;	// done compressing
 			}
 			else
@@ -381,6 +472,26 @@ namespace LxpStd
 		}
 	}
 
+	// SAVE AS DAWG
+	void Trie::SaveAsDawg(string fileName, string lexiconName) const
+	{
+		DawgCreator dawgCreator(lexiconName, this->diagnostics.numNodesAfterCompression, this->diagnostics.numWords);
+		AddTreeToDawg(this->pRootNode, dawgCreator, -1);
+		dawgCreator.SaveDawg(fileName);
+	}
+
+	// SET DEFAULT NODE NUMBER FOR TREE
+	void Trie::SetDefaultNodeNumberForTree(TrieNode* pNode)
+	{
+		// recursion stop condition
+		if (pNode == NULL)
+			return;
+
+		pNode->nodeNumber = Trie::DEFAULT_NODE_NUMBER;
+		SetDefaultNodeNumberForTree(pNode->pNextSibling);
+		SetDefaultNodeNumberForTree(pNode->pFirstChild);
+	}
+
 	// SET IS COUNTED STATE FOR TREE
 	void Trie::SetIsCountedStateForTree(TrieNode* pNode, bool isCounted)
 	{
@@ -391,6 +502,33 @@ namespace LxpStd
 		pNode->isCounted = isCounted;
 		SetIsCountedStateForTree(pNode->pNextSibling, isCounted);
 		SetIsCountedStateForTree(pNode->pFirstChild, isCounted);
+	}
+
+	// TRIE NODE TO DAWG NODE
+	void Trie::TrieNodeToDawgNode(const TrieNode* pTrieNode, DawgNode& dawgNode) throw(...)
+	{
+		// validation
+		if (pTrieNode == NULL)
+			throw(std::exception("pTrieNode is NULL!"));;
+
+		// one field at a time!
+		dawgNode.letter = pTrieNode->letter;
+
+		if (pTrieNode->pFirstChild != NULL)
+			dawgNode.childNodeId = pTrieNode->pFirstChild->nodeNumber;
+		else
+			dawgNode.childNodeId = 0;
+
+		// needed as the two types are different (bool vs unsigned int with 1 bit length)
+		if (pTrieNode->isWordTerminal)
+			dawgNode.isTerminal = TRUE;
+		else
+			dawgNode.isTerminal = FALSE;
+
+		if (pTrieNode->pNextSibling == NULL)
+			dawgNode.isLastChild = TRUE;
+		else
+			dawgNode.isLastChild = FALSE;
 	}
 
 	// UPDATE COMPRESSION DIAGNOSTICS

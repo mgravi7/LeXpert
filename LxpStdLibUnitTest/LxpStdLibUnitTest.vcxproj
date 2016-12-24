@@ -193,6 +193,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BlockMemoryTest.cpp" />
+    <ClCompile Include="DawgTest.cpp" />
     <ClCompile Include="TrieTest.cpp" />
     <ClCompile Include="UnitTestApp.xaml.cpp">
       <DependentUpon>UnitTestApp.xaml</DependentUpon>

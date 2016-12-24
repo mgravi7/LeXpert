@@ -18,6 +18,7 @@
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="BlockMemoryTest.cpp" />
     <ClCompile Include="TrieTest.cpp" />
+    <ClCompile Include="DawgTest.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
