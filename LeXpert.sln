@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LxpStdLib", "LxpStdLib\LxpS
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LxpStdLibUnitTest", "LxpStdLibUnitTest\LxpStdLibUnitTest.vcxproj", "{A37BA78A-0CA0-4E56-B9E8-E94F16381413}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MakeDawg", "MakeDawg\MakeDawg.vcxproj", "{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM = Debug|ARM
@@ -47,6 +49,24 @@ Global
 		{A37BA78A-0CA0-4E56-B9E8-E94F16381413}.Release|x86.ActiveCfg = Release|Win32
 		{A37BA78A-0CA0-4E56-B9E8-E94F16381413}.Release|x86.Build.0 = Release|Win32
 		{A37BA78A-0CA0-4E56-B9E8-E94F16381413}.Release|x86.Deploy.0 = Release|Win32
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Debug|ARM.ActiveCfg = Debug|ARM
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Debug|ARM.Build.0 = Debug|ARM
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Debug|ARM.Deploy.0 = Debug|ARM
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Debug|x64.ActiveCfg = Debug|x64
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Debug|x64.Build.0 = Debug|x64
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Debug|x64.Deploy.0 = Debug|x64
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Debug|x86.ActiveCfg = Debug|Win32
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Debug|x86.Build.0 = Debug|Win32
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Debug|x86.Deploy.0 = Debug|Win32
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Release|ARM.ActiveCfg = Release|ARM
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Release|ARM.Build.0 = Release|ARM
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Release|ARM.Deploy.0 = Release|ARM
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Release|x64.ActiveCfg = Release|x64
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Release|x64.Build.0 = Release|x64
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Release|x64.Deploy.0 = Release|x64
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Release|x86.ActiveCfg = Release|Win32
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Release|x86.Build.0 = Release|Win32
+		{AEB6A9DF-4455-4460-ADB1-870AC38AE2D3}.Release|x86.Deploy.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
